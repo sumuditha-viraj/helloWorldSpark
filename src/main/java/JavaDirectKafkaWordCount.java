@@ -16,6 +16,9 @@
  */
 
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.log4j.Level;
@@ -106,46 +109,34 @@ public final class JavaDirectKafkaWordCount {
 
         // Get the lines, split them into words, count the words and print
         JavaDStream<String> lines = messages.map(ConsumerRecord::value);
-        JavaDStream<String> words = lines.flatMap(x -> Arrays.asList(SPACE.split(x)).iterator());
 
-        words.foreachRDD(word -> {
-            word.foreach(w -> {
-                runDrools(w);
+        lines.foreachRDD(line -> {
+            line.foreach(w -> {
+                serializeToJavaModel(w);
             });
-
         });
-
-//        JavaPairDStream<String, Integer> wordCounts = words.mapToPair(s -> new Tuple2<>(s, 1))
-//                .reduceByKey((i1, i2) -> i1 + i2);
-//        wordCounts.print();
 
         // Start the computation
         jssc.start();
         jssc.awaitTermination();
     }
 
+    private static void serializeToJavaModel(String line){
+        JsonElement jelement = new JsonParser().parse(line);
+        JsonObject jobject = jelement.getAsJsonObject();
+        JsonObject content = jobject.getAsJsonObject("content");
+        JsonElement countryCode = content.get("CONUTRY_CODE");
+        runDrools(countryCode.getAsString());
+    }
+
     private static void runDrools(String word){
-        //KieServices ks = KieServices.Factory.get();
-        //KieContainer kc = ks.getKieClasspathContainer();
         StatelessKieSession ksession = KieSessionFactory.getKieSession("/home/centos/sparkStreaming/helloDrools.drl");
-
-        //KieSession ksession = kc.newKieSession("HelloWorldKS");
-
-        //ksession.addEventListener( new DebugAgendaEventListener() );
-        //ksession.addEventListener( new DebugRuleRuntimeEventListener() );
 
         // The application can insert facts into the session
         final Message message = new Message();
 
-
         message.setMessage(word);
-        message.setStatus(Integer.parseInt(word));
         ksession.execute(message);
-
-
-        // and fire the rules
-        //ksession.fireAllRules();
-
     }
 
 
